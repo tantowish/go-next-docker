@@ -78,7 +78,7 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
 		rows, err := db.Query("SELECT * FROM users")
 		if err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			http.Error(response, "Failed to Fetch", http.StatusInternalServerError)
 			return
 		}
 		defer rows.Close()
@@ -87,17 +87,23 @@ func getUsers(db *sql.DB) http.HandlerFunc {
 		for rows.Next() {
 			var u User
 			if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
-				http.Error(response, err.Error(), http.StatusInternalServerError)
+				response.WriteHeader(http.StatusInternalServerError)
+				json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 				return
 			}
 			users = append(users, u)
 		}
 		if err := rows.Err(); err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			response.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 			return
 		}
 
-		json.NewEncoder(response).Encode(users)
+		resp := map[string]interface{}{
+			"message": "Success Get List Users",
+			"data": users,
+		}
+		json.NewEncoder(response).Encode(resp)
 	}
 }
 
@@ -110,30 +116,42 @@ func getUser(db *sql.DB) http.HandlerFunc {
 		var u User
 		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.ID, &u.Name, &u.Email)
 		if err != nil {
-			http.Error(response, "User not found", http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(response).Encode(map[string]string{"message": "User not found"})
 			return
 		}
 
-		json.NewEncoder(response).Encode(u)
+		resp := map[string]interface{}{
+			"message": "Success Get User",
+			"data":    u,
+		}
+		json.NewEncoder(response).Encode(resp)
 	}
 }
 
 // create user
 func createUser(db *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+	return func(response http.ResponseWriter, request *http.Request) {
 		var u User
-		if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		if err := json.NewDecoder(request.Body).Decode(&u); err != nil {
+			response.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 			return
 		}
 
 		err := db.QueryRow("INSERT INTO users (name, email) VALUES ($1, $2) RETURNING id", u.Name, u.Email).Scan(&u.ID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			response.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 			return
 		}
 
-		json.NewEncoder(w).Encode(u)
+		resp := map[string]interface{}{
+			"message": "Success Create User",
+			"data":    u,
+		}
+
+		json.NewEncoder(response).Encode(resp)
 	}
 }
 
@@ -142,7 +160,8 @@ func updateUser(db *sql.DB) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
 		var u User
 		if err := json.NewDecoder(request.Body).Decode(&u); err != nil {
-			http.Error(response, err.Error(), http.StatusBadRequest)
+			response.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 			return
 		}
 
@@ -151,18 +170,25 @@ func updateUser(db *sql.DB) http.HandlerFunc {
 
 		_, err := db.Exec("UPDATE users SET name = $1, email = $2 WHERE id = $3", u.Name, u.Email, id)
 		if err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			response.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 			return
 		}
 
 		var updatedUser User
 		err = db.QueryRow("SELECT id, name, email FROM users WHERE id = $1", id).Scan(&updatedUser.ID, &updatedUser.Name, &updatedUser.Email)
 		if err != nil {
-			http.Error(response, err.Error(), http.StatusInternalServerError)
+			response.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(response).Encode(map[string]string{"message": err.Error()})
 			return
 		}
 
-		json.NewEncoder(response).Encode(updatedUser)
+		resp := map[string]interface{}{
+			"message": "Success Update User",
+			"data":    updatedUser,
+		}
+
+		json.NewEncoder(response).Encode(resp)	
 	}
 }
 
@@ -175,7 +201,8 @@ func deleteUser(db *sql.DB) http.HandlerFunc {
 		var u User
 		err := db.QueryRow("SELECT * FROM users WHERE id = $1", id).Scan(&u.ID, &u.Name, &u.Email)
 		if err != nil {
-			http.Error(response, "User not found", http.StatusNotFound)
+			response.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(response).Encode(map[string]string{"message": "User not found"})
 			return
 		}
 
@@ -185,6 +212,10 @@ func deleteUser(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		response.WriteHeader(http.StatusNoContent)
+		resp := map[string]interface{}{
+			"message": "Success Delete User",
+			"user":    u,
+		}
+		json.NewEncoder(response).Encode(resp)
 	}
 }
